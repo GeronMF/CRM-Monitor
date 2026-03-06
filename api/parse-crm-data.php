@@ -52,80 +52,162 @@ $config = $sessionConfigs[$session];
 
 error_log("Using config: " . json_encode($config));
 
-// Функция логина в CRM
+// Функция логина в CRM (использует рабочую логику из test_crm_debug.php)
 function loginToCRM($config) {
     $loginUrl = 'https://datapoint.center/';
+    $cookieFile = sys_get_temp_dir() . '/crm_cookies_' . uniqid() . '.txt';
     
+    // Шаг 1: Получаем страницу входа
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $loginUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-    curl_setopt($ch, CURLOPT_HEADER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $loginUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_COOKIEJAR => $cookieFile,
+        CURLOPT_COOKIEFILE => $cookieFile,
+        CURLOPT_HTTPHEADER => [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+        ],
     ]);
     
-    $response = curl_exec($ch);
-    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    $headers = substr($response, 0, $headerSize);
+    $initialHtml = curl_exec($ch);
+    $initialCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     
-    // Извлекаем cookies
-    preg_match_all('/Set-Cookie: ([^;]+)/', $headers, $matches);
-    $cookies = [];
-    if (!empty($matches[1])) {
-        foreach ($matches[1] as $cookie) {
-            $cookies[] = $cookie;
-        }
-    }
+    error_log("Initial request HTTP code: $initialCode");
     
-    // Логин
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $loginUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+    // Шаг 2: Отправляем форму логина
+    $postData = [
         'auth_login' => $config['login'],
         'auth_password' => $config['password'],
-    ]));
-    curl_setopt($ch, CURLOPT_HEADER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Cookie: ' . implode('; ', $cookies),
-        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Referer: ' . $loginUrl,
-        'Origin: https://datapoint.center',
+        'logok' => 'Войти',
+    ];
+    
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $loginUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query($postData),
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_COOKIEJAR => $cookieFile,
+        CURLOPT_COOKIEFILE => $cookieFile,
+        CURLOPT_HEADER => true,
+        CURLOPT_HTTPHEADER => [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Referer: ' . $loginUrl,
+            'Origin: https://datapoint.center',
+        ],
     ]);
     
     $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
     $headers = substr($response, 0, $headerSize);
+    $body = substr($response, $headerSize);
     curl_close($ch);
     
-    // Обновляем cookies
-    preg_match_all('/Set-Cookie: ([^;]+)/', $headers, $matches);
-    if (!empty($matches[1])) {
-        foreach ($matches[1] as $cookie) {
-            $cookieName = explode('=', $cookie)[0];
-            $found = false;
-            foreach ($cookies as $i => $existingCookie) {
-                if (strpos($existingCookie, $cookieName . '=') === 0) {
-                    $cookies[$i] = $cookie;
-                    $found = true;
-                    break;
-                }
+    error_log("Login response HTTP code: $httpCode");
+    
+    // Извлекаем PHPSESSID из Set-Cookie
+    $phpSessionId = '';
+    if (preg_match('/Set-Cookie:.*?PHPSESSID=([^;]+)/i', $headers, $matches)) {
+        $phpSessionId = trim($matches[1]);
+        error_log("PHPSESSID found: $phpSessionId");
+        
+        // Обновляем cookie файл с правильным PHPSESSID
+        $cookieContent = "# Netscape HTTP Cookie File\n";
+        $cookieContent .= "# https://curl.se/docs/http-cookies.html\n";
+        $cookieContent .= "# This file was generated by libcurl! Edit at your own risk.\n\n";
+        $cookieContent .= "datapoint.center\tFALSE\t/\tFALSE\t0\tPHPSESSID\t{$phpSessionId}\n";
+        file_put_contents($cookieFile, $cookieContent);
+    }
+    
+    // Если редирект - следуем ему
+    if ($httpCode === 302 || $httpCode === 303) {
+        if (preg_match('/Location:\s*(.+)/i', $headers, $matches)) {
+            $redirectUrl = trim($matches[1]);
+            if (!preg_match('/^https?:\/\//', $redirectUrl)) {
+                $redirectUrl = 'https://datapoint.center' . $redirectUrl;
             }
-            if (!$found) {
-                $cookies[] = $cookie;
-            }
+            error_log("Following redirect to: $redirectUrl");
+            
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $redirectUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_COOKIEJAR => $cookieFile,
+                CURLOPT_COOKIEFILE => $cookieFile,
+            ]);
+            
+            curl_exec($ch);
+            curl_close($ch);
         }
     }
     
-    return implode('; ', $cookies);
+    // Извлекаем PHPSESSID из cookie файла
+    $sessionCookie = '';
+    if (file_exists($cookieFile)) {
+        $cookieContent = file_get_contents($cookieFile);
+        if (preg_match('/PHPSESSID\s+([^\s\n]+)/', $cookieContent, $matches)) {
+            $phpSessionId = trim($matches[1]);
+            $sessionCookie = 'PHPSESSID=' . $phpSessionId;
+            error_log("PHPSESSID from file: $phpSessionId");
+        }
+    }
+    
+    if (empty($sessionCookie)) {
+        error_log("ERROR: No PHPSESSID found");
+        @unlink($cookieFile);
+        return '';
+    }
+    
+    // Проверяем авторизацию через dashboard
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => 'https://datapoint.center/dashboard/',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_COOKIEFILE => $cookieFile,
+        CURLOPT_HTTPHEADER => [
+            'Cookie: ' . $sessionCookie,
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+        ],
+    ]);
+    
+    $verifyResponse = curl_exec($ch);
+    $verifyCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    $isLoggedIn = strpos($verifyResponse, 'dashboard') !== false || 
+                  strpos($verifyResponse, 'выход') !== false || 
+                  strpos($verifyResponse, 'auth_login') === false;
+    
+    error_log("Verification code: $verifyCode, Is logged in: " . ($isLoggedIn ? 'Yes' : 'No'));
+    
+    if (!$isLoggedIn) {
+        error_log("ERROR: Login verification failed");
+        @unlink($cookieFile);
+        return '';
+    }
+    
+    // Возвращаем cookie строку и сохраняем путь к файлу для последующих запросов
+    return $sessionCookie;
 }
 
 // Функция парсинга данных из HTML
@@ -280,45 +362,73 @@ try {
     error_log("Filtered URL: $filteredPageUrl");
     error_log("Process Time URL: $processTimeUrl");
     
-    // Получаем данные
+    // Получаем данные (используем cookie файл)
+    $cookieFile = sys_get_temp_dir() . '/crm_cookies_' . uniqid() . '.txt';
+    file_put_contents($cookieFile, "# Netscape HTTP Cookie File\n# https://curl.se/docs/http-cookies.html\n# This file was generated by libcurl! Edit at your own risk.\n\n");
+    $phpSessionId = str_replace('PHPSESSID=', '', $cookies);
+    file_put_contents($cookieFile, "datapoint.center\tFALSE\t/\tFALSE\t0\tPHPSESSID\t{$phpSessionId}\n", FILE_APPEND);
+    
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $filteredPageUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Cookie: ' . $cookies,
-        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Referer: https://datapoint.center/dashboard/',
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $filteredPageUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_COOKIEFILE => $cookieFile,
+        CURLOPT_COOKIEJAR => $cookieFile,
+        CURLOPT_HTTPHEADER => [
+            'Cookie: ' . $cookies,
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Referer: https://datapoint.center/dashboard/',
+        ],
     ]);
     $filteredData = curl_exec($ch);
     curl_close($ch);
     
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $totalPageUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Cookie: ' . $cookies,
-        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Referer: https://datapoint.center/dashboard/',
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $totalPageUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_COOKIEFILE => $cookieFile,
+        CURLOPT_COOKIEJAR => $cookieFile,
+        CURLOPT_HTTPHEADER => [
+            'Cookie: ' . $cookies,
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Referer: https://datapoint.center/dashboard/',
+        ],
     ]);
     $totalData = curl_exec($ch);
     curl_close($ch);
     
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $processTimeUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Cookie: ' . $cookies,
-        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Referer: https://datapoint.center/dashboard/',
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $processTimeUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_COOKIEFILE => $cookieFile,
+        CURLOPT_COOKIEJAR => $cookieFile,
+        CURLOPT_HTTPHEADER => [
+            'Cookie: ' . $cookies,
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Referer: https://datapoint.center/dashboard/',
+        ],
     ]);
     $processTimeData = curl_exec($ch);
     curl_close($ch);
+    
+    @unlink($cookieFile);
     
     if ($debug) {
         echo json_encode([
