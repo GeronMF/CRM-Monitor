@@ -360,12 +360,24 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url);
     const debug = url.searchParams.get('debug') === 'true';
-    const session = url.searchParams.get('session') || 'ecommerce';
+    const sessionParam = url.searchParams.get('session') || 'ecommerce';
+    const session = sessionParam.toLowerCase();
+    
+    console.log('=== Starting CRM data fetch ===');
+    console.log('Session parameter received:', sessionParam);
+    console.log('Session normalized:', session);
+    console.log('Available sessions:', Object.keys(sessionConfigs));
     
     const config = sessionConfigs[session] || sessionConfigs.ecommerce;
     
-    console.log('=== Starting CRM data fetch ===');
-    console.log('Session:', session);
+    console.log('Using config for session:', session);
+    console.log('Config:', {
+      login: config.login,
+      roleId: config.roleId,
+      sourceFilter: config.sourceFilter,
+      processTimeSourceId: config.processTimeSourceId
+    });
+    
     const cookies = await loginToCRM(session);
 
     console.log('=== Login process completed ===');
