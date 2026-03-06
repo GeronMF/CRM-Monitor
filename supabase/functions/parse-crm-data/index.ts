@@ -404,6 +404,7 @@ Deno.serve(async (req: Request) => {
     console.log('Role ID:', config.roleId);
     console.log('Source Filter:', config.sourceFilter);
     console.log('Process Time Source ID:', config.processTimeSourceId);
+    console.log('Source Params:', sourceParams);
     console.log('Filtered URL:', filteredPageUrl);
     console.log('Process Time URL:', processTimeUrl);
     console.log('=== Fetching filtered data ===');
@@ -446,6 +447,16 @@ Deno.serve(async (req: Request) => {
     console.log('Filtered response status:', filteredResponse.status);
     console.log('Total response status:', totalResponse.status);
     console.log('Process time response status:', processTimeResponse.status);
+    console.log('Filtered data length:', filteredData.length);
+    console.log('Total data length:', totalData.length);
+    console.log('Process time data length:', processTimeData.length);
+    
+    // Проверяем, что данные содержат ожидаемые фильтры
+    if (session === 'diar') {
+      console.log('Checking for ДИАР in filtered data:', filteredData.includes('ДИАР'));
+    } else if (session === 'rozpakuj') {
+      console.log('Checking for Розпакуй in filtered data:', filteredData.includes('Розпакуй') || filteredData.includes('Розпакуй'));
+    }
 
     if (debug) {
       return new Response(JSON.stringify({
