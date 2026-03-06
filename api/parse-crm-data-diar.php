@@ -258,10 +258,14 @@ function parseProcessTimeData($html) {
         '120+ мин' => 0
     ];
     
+    error_log("parseProcessTimeData: HTML length = " . strlen($html));
+    
     if (preg_match('/<table[^>]*class="[^"]*shop-table[^"]*"[^>]*>([\s\S]*?)<\/table>/i', $html, $tableMatch)) {
+        error_log("parseProcessTimeData: Table found");
         $tableHtml = $tableMatch[1];
         
         if (preg_match_all('/<tr([^>]*)>([\s\S]*?)<\/tr>/i', $tableHtml, $trMatches, PREG_SET_ORDER)) {
+            error_log("parseProcessTimeData: Found " . count($trMatches) . " table rows");
             foreach ($trMatches as $trMatch) {
                 $trAttrs = $trMatch[1];
                 $trContent = $trMatch[2];
@@ -276,6 +280,7 @@ function parseProcessTimeData($html) {
                     if (preg_match('/^(\d+)\s+\((\d+)\s+процессов\)$/', $text, $match)) {
                         $minutes = (int) $match[1];
                         $count = (int) $match[2];
+                        error_log("parseProcessTimeData: Found process time - minutes: $minutes, count: $count");
                         
                         if ($minutes <= 5) $groups['0–5 мин'] += $count;
                         elseif ($minutes <= 10) $groups['5–10 мин'] += $count;
@@ -284,10 +289,16 @@ function parseProcessTimeData($html) {
                         elseif ($minutes <= 60) $groups['30–60 мин'] += $count;
                         elseif ($minutes <= 120) $groups['60–120 мин'] += $count;
                         else $groups['120+ мин'] += $count;
+                    } else {
+                        error_log("parseProcessTimeData: Text doesn't match pattern: " . substr($text, 0, 100));
                     }
                 }
             }
+        } else {
+            error_log("parseProcessTimeData: No table rows found");
         }
+    } else {
+        error_log("parseProcessTimeData: Table with class 'shop-table' not found");
     }
     
     $total = array_sum($groups);
@@ -307,6 +318,64 @@ function parseProcessTimeData($html) {
 function calculatePercentage($value, $total) {
     if ($total == 0) return '0%';
     return round(($value / $total) * 100, 1) . '%';
+}
+
+// Функция выполнения запроса с повторными попытками
+function fetchWithRetry($url, $cookies, $cookieFile, $maxRetries = 3) {
+    for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_COOKIEFILE => $cookieFile,
+            CURLOPT_COOKIEJAR => $cookieFile,
+            CURLOPT_HTTPHEADER => [
+                'Cookie: ' . $cookies,
+                'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Referer: https://datapoint.center/dashboard/',
+            ],
+        ]);
+        
+        $data = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($httpCode === 200 && !empty($data) && strlen($data) > 1000) {
+            // Проверяем, что HTML содержит нужные данные
+            if (strpos($data, 'Кол-во заказов') !== false || strpos($data, 'Сумма заказов') !== false) {
+                error_log("Successfully fetched data on attempt $attempt, length: " . strlen($data));
+                return $data;
+            } else {
+                error_log("Attempt $attempt: HTML doesn't contain expected data markers");
+            }
+        } else {
+            error_log("Attempt $attempt failed: HTTP code: $httpCode, Error: $error, Data length: " . strlen($data));
+        }
+        
+        if ($attempt < $maxRetries) {
+            usleep(500000); // Задержка 0.5 секунды перед повтором
+        }
+    }
+    
+    return false;
+}
+
+// Функция проверки валидности распарсенных данных
+function isValidData($parsedData) {
+    // Проверяем, что хотя бы одно значение не ноль (кроме missedCalls, которые могут быть 0)
+    $hasData = $parsedData['orders'] > 0 || 
+               $parsedData['orderSum'] > 0 || 
+               $parsedData['allCalls'] > 0 ||
+               $parsedData['employees']['total'] > 0;
+    
+    return $hasData;
 }
 
 try {
@@ -335,71 +404,78 @@ try {
     error_log("Filtered URL: $filteredPageUrl");
     error_log("Process Time URL: $processTimeUrl");
     
-    // Получаем данные (используем cookie файл)
+    // Получаем данные с повторными попытками
     $cookieFile = sys_get_temp_dir() . '/crm_cookies_' . uniqid() . '.txt';
     file_put_contents($cookieFile, "# Netscape HTTP Cookie File\n# https://curl.se/docs/http-cookies.html\n# This file was generated by libcurl! Edit at your own risk.\n\n");
     $phpSessionId = str_replace('PHPSESSID=', '', $cookies);
     file_put_contents($cookieFile, "datapoint.center\tFALSE\t/\tFALSE\t0\tPHPSESSID\t{$phpSessionId}\n", FILE_APPEND);
     
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $filteredPageUrl,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_COOKIEFILE => $cookieFile,
-        CURLOPT_COOKIEJAR => $cookieFile,
-        CURLOPT_HTTPHEADER => [
-            'Cookie: ' . $cookies,
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer: https://datapoint.center/dashboard/',
-        ],
-    ]);
-    $filteredData = curl_exec($ch);
-    curl_close($ch);
+    $maxAttempts = 3;
+    $filteredData = false;
+    $totalData = false;
+    $processTimeData = false;
     
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $totalPageUrl,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_COOKIEFILE => $cookieFile,
-        CURLOPT_COOKIEJAR => $cookieFile,
-        CURLOPT_HTTPHEADER => [
-            'Cookie: ' . $cookies,
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer: https://datapoint.center/dashboard/',
-        ],
-    ]);
-    $totalData = curl_exec($ch);
-    curl_close($ch);
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+        error_log("Fetch attempt $attempt of $maxAttempts");
+        
+        // Получаем отфильтрованные данные
+        if (!$filteredData) {
+            $filteredData = fetchWithRetry($filteredPageUrl, $cookies, $cookieFile, 2);
+        }
+        
+        // Получаем общие данные
+        if (!$totalData) {
+            $totalData = fetchWithRetry($totalPageUrl, $cookies, $cookieFile, 2);
+        }
+        
+        // Получаем данные о времени обработки
+        if (!$processTimeData) {
+            $processTimeData = fetchWithRetry($processTimeUrl, $cookies, $cookieFile, 2);
+        }
+        
+        // Если все данные получены, проверяем валидность
+        if ($filteredData && $totalData && $processTimeData) {
+            $parsedFiltered = parseTableData($filteredData);
+            $parsedTotal = parseTableData($totalData);
+            
+            if (isValidData($parsedFiltered) || isValidData($parsedTotal)) {
+                error_log("Valid data obtained on attempt $attempt");
+                break;
+            } else {
+                error_log("Attempt $attempt: All data is zero, retrying...");
+                $filteredData = false;
+                $totalData = false;
+                $processTimeData = false;
+                
+                if ($attempt < $maxAttempts) {
+                    // Перелогиниваемся перед повтором
+                    error_log("Re-authenticating before retry...");
+                    $cookies = loginToCRM($config);
+                    if (empty($cookies)) {
+                        throw new Exception('Failed to re-authenticate');
+                    }
+                    $phpSessionId = str_replace('PHPSESSID=', '', $cookies);
+                    file_put_contents($cookieFile, "# Netscape HTTP Cookie File\n# https://curl.se/docs/http-cookies.html\n# This file was generated by libcurl! Edit at your own risk.\n\n");
+                    file_put_contents($cookieFile, "datapoint.center\tFALSE\t/\tFALSE\t0\tPHPSESSID\t{$phpSessionId}\n", FILE_APPEND);
+                    sleep(1); // Задержка перед повтором
+                }
+            }
+        } else {
+            error_log("Attempt $attempt: Failed to fetch all data");
+            if ($attempt < $maxAttempts) {
+                sleep(1);
+            }
+        }
+    }
     
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $processTimeUrl,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_COOKIEFILE => $cookieFile,
-        CURLOPT_COOKIEJAR => $cookieFile,
-        CURLOPT_HTTPHEADER => [
-            'Cookie: ' . $cookies,
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer: https://datapoint.center/dashboard/',
-        ],
-    ]);
-    $processTimeData = curl_exec($ch);
-    curl_close($ch);
+    if (!$filteredData || !$totalData) {
+        throw new Exception('Failed to fetch data after ' . $maxAttempts . ' attempts');
+    }
+    
+    if (!$processTimeData) {
+        error_log("WARNING: Failed to fetch process time data, using empty data");
+        $processTimeData = '';
+    }
     
     @unlink($cookieFile);
     
@@ -421,6 +497,8 @@ try {
     
     error_log("Parsed filtered orders: " . $parsedFiltered['orders']);
     error_log("Parsed total orders: " . $parsedTotal['orders']);
+    error_log("Process time intervals: " . json_encode($processTimeIntervals));
+    error_log("Process time HTML length: " . strlen($processTimeData));
     
     $result = [
         'orders' => [

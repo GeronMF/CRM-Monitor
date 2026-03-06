@@ -25,7 +25,7 @@ function App() {
   const fetchData = async (debug = false) => {
     try {
       setError(null);
-      const apiUrl = `/api/parse-crm-data.php${debug ? '?debug=true' : ''}`;
+      const apiUrl = `/crm-monitor/rozpakuy/api/parse-crm-data.php${debug ? '?debug=true' : ''}`;
       const response = await fetch(apiUrl, {
         cache: 'no-store',
       });
