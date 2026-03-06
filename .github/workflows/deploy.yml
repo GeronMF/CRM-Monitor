@@ -79,7 +79,7 @@ jobs:
       - name: Copy API files
         run: |
           mkdir -p dist/api dist-diar/api dist-rozpakuj/api
-          cp api/parse-crm-data-ecommerce.php dist/api/parse-crm-data.php
+          cp api/parse-crm-data-ecommerce.php dist/api/parse-crm-data-ecommerce.php
           cp api/parse-crm-data-diar.php dist-diar/api/parse-crm-data.php
           cp api/parse-crm-data-rozpakuj.php dist-rozpakuj/api/parse-crm-data.php
       
