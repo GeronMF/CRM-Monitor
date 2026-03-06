@@ -387,6 +387,13 @@ Deno.serve(async (req: Request) => {
     const totalPageUrl = `https://datapoint.center/admin/report/desiner/101/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_user_manageronline=online&filter_event_uservoip_que_sourcechild=1&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
     const processTimeUrl = `https://datapoint.center/admin/report/desiner/132/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_order_sourceid%5B%5D=${config.processTimeSourceId}&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
 
+    console.log('=== URL Configuration ===');
+    console.log('Session:', session);
+    console.log('Role ID:', config.roleId);
+    console.log('Source Filter:', config.sourceFilter);
+    console.log('Process Time Source ID:', config.processTimeSourceId);
+    console.log('Filtered URL:', filteredPageUrl);
+    console.log('Process Time URL:', processTimeUrl);
     console.log('=== Fetching filtered data ===');
     const filteredResponse = await fetch(filteredPageUrl, {
       headers: {
