@@ -24,11 +24,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Build project
+      - name: Build main (E-commerce)
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
+      
+      - name: Build DIAR
+        run: |
+          cp src/main-diar.tsx src/main.tsx
+          sed -i 's|base: '\''/crm-monitor/'\''|base: '\''/crm-monitor/diar/'\''|g' vite.config.ts
+          npm run build
+          mv dist dist-diar
+          cp src/main.tsx.backup src/main.tsx 2>/dev/null || true
+          git checkout vite.config.ts
+      
+      - name: Build Rozpakuj
+        run: |
+          cp src/main-rozpakuj.tsx src/main.tsx
+          sed -i 's|base: '\''/crm-monitor/'\''|base: '\''/crm-monitor/rozpakuy/'\''|g' vite.config.ts
+          npm run build
+          mv dist dist-rozpakuj
+          git checkout src/main.tsx vite.config.ts
+      
+      - name: Copy API files
+        run: |
+          mkdir -p dist/api dist-diar/api dist-rozpakuj/api
+          cp api/parse-crm-data-diar.php dist-diar/api/parse-crm-data.php
+          cp api/parse-crm-data-rozpakuj.php dist-rozpakuj/api/parse-crm-data.php
       
       - name: Setup SSH
         run: |
@@ -37,13 +60,21 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
       
-      - name: Create deployment directory
+      - name: Create deployment directories
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ${{ secrets.DEPLOY_PATH }}/crm-monitor"
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ${{ secrets.DEPLOY_PATH }}/crm-monitor ${{ secrets.DEPLOY_PATH }}/crm-monitor/diar ${{ secrets.DEPLOY_PATH }}/crm-monitor/rozpakuy"
       
-      - name: Deploy files
+      - name: Deploy main (E-commerce)
         run: |
           scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }} -r -o StrictHostKeyChecking=no dist/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/crm-monitor/
+      
+      - name: Deploy DIAR
+        run: |
+          scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }} -r -o StrictHostKeyChecking=no dist-diar/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/crm-monitor/diar/
+      
+      - name: Deploy Rozpakuj
+        run: |
+          scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }} -r -o StrictHostKeyChecking=no dist-rozpakuj/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/crm-monitor/rozpakuy/
       
       - name: Set permissions
         run: |
