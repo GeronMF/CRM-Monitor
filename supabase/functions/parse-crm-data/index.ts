@@ -1,5 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
+// Deno types for Supabase Edge Functions
+declare global {
+  const Deno: {
+    serve: (handler: (request: Request) => Promise<Response>) => void;
+  };
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",

@@ -9,47 +9,25 @@ import {
   AlertCircle,
   XCircle,
   RefreshCw,
-  Activity,
-  ChevronDown
+  Activity
 } from 'lucide-react';
 import { MetricCard } from './components/MetricCard';
 import { EmployeeStatus } from './components/EmployeeStatus';
 import { ProcessTimeChart } from './components/ProcessTimeChart';
 import { MetricData } from './types';
 
-type SessionType = 'ecommerce' | 'diar' | 'rozpakuj';
-
-interface SessionConfig {
-  id: SessionType;
-  name: string;
-  description: string;
-}
-
-const sessions: SessionConfig[] = [
-  { id: 'ecommerce', name: 'E-commerce', description: 'E-commerce метрики в реальном времени' },
-  { id: 'diar', name: 'ДИАР', description: 'ДИАР метрики в реальном времени' },
-  { id: 'rozpakuj', name: 'Трансляция канала Розпакуй', description: 'Трансляция канала Розпакуй метрики в реальном времени' },
-];
-
 function App() {
   const [data, setData] = useState<MetricData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [session, setSession] = useState<SessionType>('ecommerce');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
-  const currentSession = sessions.find(s => s.id === session) || sessions[0];
 
   const fetchData = async (debug = false) => {
     try {
       setError(null);
-      // Используем локальный API вместо Supabase
-      const apiUrl = `/api/parse-crm-data.php?session=${session}${debug ? '&debug=true' : ''}`;
-      console.log('Fetching data for session:', session);
-      console.log('API URL:', apiUrl);
+      const apiUrl = `/api/parse-crm-data-ecommerce.php${debug ? '?debug=true' : ''}`;
       const response = await fetch(apiUrl, {
-        cache: 'no-store', // Отключаем кэширование
+        cache: 'no-store',
       });
 
       if (!response.ok) {
@@ -59,8 +37,7 @@ function App() {
       }
 
       const result = await response.json();
-      console.log('API Response for session', session, ':', result);
-      console.log('Orders value:', result.orders?.value, 'Total:', result.orders?.total);
+      console.log('API Response:', result);
 
       if (debug) {
         console.log('=== DEBUG MODE ===');
@@ -82,22 +59,10 @@ function App() {
   };
 
   useEffect(() => {
-    setLoading(true);
     fetchData();
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, [session]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (isDropdownOpen && !target.closest('.dropdown-container')) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isDropdownOpen]);
+  }, []);
 
   if (loading) {
     return (
@@ -147,10 +112,10 @@ function App() {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white via-cyan-100 to-blue-200 bg-clip-text text-transparent mb-0.5">
-                {currentSession.name}
+                CRM Monitor
               </h1>
               <p className="text-slate-400 text-xs sm:text-sm hidden sm:block">
-                {currentSession.description}
+                E-commerce метрики в реальном времени
               </p>
             </div>
           </div>
@@ -160,35 +125,6 @@ function App() {
                 {lastUpdate.toLocaleTimeString('ru-RU')}
               </p>
             )}
-            <div className="relative dropdown-container">
-              <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-1.5 sm:gap-2 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 hover:text-cyan-300 backdrop-blur-sm font-medium py-2 px-3 sm:py-2.5 sm:px-4 rounded-lg transition-all border border-slate-700/50 hover:border-cyan-500/30 text-sm"
-              >
-                <span className="hidden sm:inline">{currentSession.name}</span>
-                <span className="sm:hidden">Сессия</span>
-                <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-slate-800 rounded-lg border border-slate-700/50 shadow-xl z-50 backdrop-blur-sm">
-                  {sessions.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => {
-                        setSession(s.id);
-                        setIsDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-3 hover:bg-slate-700/50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                        session === s.id ? 'bg-cyan-600/20 text-cyan-300' : 'text-slate-300'
-                      }`}
-                    >
-                      <div className="font-medium">{s.name}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">{s.description}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
             <button
               onClick={() => fetchData(false)}
               className="flex items-center gap-1.5 sm:gap-2 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 hover:text-cyan-300 backdrop-blur-sm font-medium py-2 px-3 sm:py-2.5 sm:px-4 rounded-lg transition-all border border-slate-700/50 hover:border-cyan-500/30 text-sm"
