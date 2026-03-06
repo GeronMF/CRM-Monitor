@@ -355,6 +355,10 @@ function parseProcessTimeData(html: string): TimeInterval[] {
 }
 
 Deno.serve(async (req: Request) => {
+  console.log('=== FUNCTION CALLED ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
@@ -369,29 +373,36 @@ Deno.serve(async (req: Request) => {
     const session = sessionParam.toLowerCase();
     
     console.log('=== Starting CRM data fetch ===');
+    console.log('Full URL:', req.url);
     console.log('Session parameter received:', sessionParam);
     console.log('Session normalized:', session);
     console.log('Available sessions:', Object.keys(sessionConfigs));
     
-    const config = sessionConfigs[session] || sessionConfigs.ecommerce;
+    // Явная проверка сессии
+    if (!sessionConfigs[session]) {
+      console.error(`ERROR: Session "${session}" not found! Available: ${Object.keys(sessionConfigs).join(', ')}`);
+      throw new Error(`Invalid session: ${session}`);
+    }
     
-    console.log('Using config for session:', session);
-    console.log('Config:', {
-      login: config.login,
-      roleId: config.roleId,
-      sourceFilter: config.sourceFilter,
-      processTimeSourceId: config.processTimeSourceId
-    });
+    const config = sessionConfigs[session];
+    
+    console.log('=== SESSION CONFIGURATION ===');
+    console.log('Session:', session);
+    console.log('Login:', config.login);
+    console.log('Role ID:', config.roleId);
+    console.log('Source Filter:', JSON.stringify(config.sourceFilter));
+    console.log('Process Time Source ID:', config.processTimeSourceId);
+    console.log('============================');
     
     const cookies = await loginToCRM(session);
-
-    console.log('=== Login process completed ===');
-    console.log('Cookies obtained:', cookies ? 'Yes' : 'No');
-    console.log('Cookies length:', cookies.length);
-
-    if (!cookies) {
-      throw new Error('Failed to authenticate');
+    
+    if (!cookies || cookies.length === 0) {
+      console.error('ERROR: Failed to get cookies for session:', session);
+      throw new Error(`Authentication failed for session: ${session}`);
     }
+    
+    console.log('Login successful for session:', session, 'User:', config.login);
+    console.log('Cookies length:', cookies.length);
 
     const today = new Date().toISOString().split('T')[0];
     
@@ -481,9 +492,19 @@ Deno.serve(async (req: Request) => {
     const parsedTotal = parseTableData(totalData);
     const processTimeIntervals = parseProcessTimeData(processTimeData);
 
+    console.log('=== PARSED DATA ===');
+    console.log('Session used:', session);
+    console.log('Config used:', {
+      login: config.login,
+      roleId: config.roleId,
+      sourceFilter: config.sourceFilter
+    });
+    console.log('Parsed filtered orders:', parsedFiltered.orders);
+    console.log('Parsed total orders:', parsedTotal.orders);
     console.log('Parsed filtered data:', JSON.stringify(parsedFiltered));
     console.log('Parsed total data:', JSON.stringify(parsedTotal));
     console.log('Parsed process time intervals:', JSON.stringify(processTimeIntervals));
+    console.log('===================');
 
     const result: MetricData = {
       orders: {

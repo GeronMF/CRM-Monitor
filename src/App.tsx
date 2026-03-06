@@ -61,7 +61,8 @@ function App() {
       }
 
       const result = await response.json();
-      console.log('API Response:', result);
+      console.log('API Response for session', session, ':', result);
+      console.log('Orders value:', result.orders?.value, 'Total:', result.orders?.total);
 
       if (debug) {
         console.log('=== DEBUG MODE ===');
