@@ -1,10 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-// Deno is available in Supabase Edge Functions runtime
-declare const Deno: {
-  serve: (handler: (req: Request) => Response | Promise<Response>) => void;
-};
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -35,44 +30,11 @@ interface MetricData {
   processTimeIntervals: TimeInterval[];
 }
 
-interface SessionConfig {
-  login: string;
-  password: string;
-  roleId: string;
-  sourceFilter: string[];
-  processTimeSourceId: string;
-}
-
-const sessionConfigs: Record<string, SessionConfig> = {
-  ecommerce: {
-    login: 'German',
-    password: 'K9#bT2!mQ8vX*zL4',
-    roleId: '39',
-    sourceFilter: ['ЛЕНДИНГ', 'Сайты'],
-    processTimeSourceId: '60',
-  },
-  diar: {
-    login: 'Zaharchenko',
-    password: 'Zaharchenko1234',
-    roleId: '9',
-    sourceFilter: ['ДИАР_Укр'],
-    processTimeSourceId: '4',
-  },
-  rozpakuj: {
-    login: 'Zaharchenko',
-    password: 'Zaharchenko1234',
-    roleId: '9',
-    sourceFilter: ['Трансляция канала Розпакуй ТВ'],
-    processTimeSourceId: '65',
-  },
-};
-
-async function loginToCRM(session: string = 'ecommerce'): Promise<string> {
+async function loginToCRM(): Promise<string> {
   try {
-    const config = sessionConfigs[session] || sessionConfigs.ecommerce;
     const loginUrl = 'https://datapoint.center/';
 
-    console.log(`Step 1: Getting login page for session: ${session}...`);
+    console.log('Step 1: Getting login page...');
     const initialResponse = await fetch(loginUrl, {
       method: 'GET',
       headers: {
@@ -101,8 +63,8 @@ async function loginToCRM(session: string = 'ecommerce'): Promise<string> {
     console.log('Initial cookies count:', cookies.length);
 
     const formData = new FormData();
-    formData.append('auth_login', config.login);
-    formData.append('auth_password', config.password);
+    formData.append('auth_login', 'German');
+    formData.append('auth_password', 'K9#bT2!mQ8vX*zL4');
 
     console.log('Step 2: Submitting login form...');
     const loginResponse = await fetch(loginUrl, {
@@ -355,10 +317,6 @@ function parseProcessTimeData(html: string): TimeInterval[] {
 }
 
 Deno.serve(async (req: Request) => {
-  console.log('=== FUNCTION CALLED ===');
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
-  
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
@@ -369,60 +327,23 @@ Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url);
     const debug = url.searchParams.get('debug') === 'true';
-    const sessionParam = url.searchParams.get('session') || 'ecommerce';
-    const session = sessionParam.toLowerCase();
-    
+
     console.log('=== Starting CRM data fetch ===');
-    console.log('Full URL:', req.url);
-    console.log('Session parameter received:', sessionParam);
-    console.log('Session normalized:', session);
-    console.log('Available sessions:', Object.keys(sessionConfigs));
-    
-    // Явная проверка сессии
-    if (!sessionConfigs[session]) {
-      console.error(`ERROR: Session "${session}" not found! Available: ${Object.keys(sessionConfigs).join(', ')}`);
-      throw new Error(`Invalid session: ${session}`);
-    }
-    
-    const config = sessionConfigs[session];
-    
-    console.log('=== SESSION CONFIGURATION ===');
-    console.log('Session:', session);
-    console.log('Login:', config.login);
-    console.log('Role ID:', config.roleId);
-    console.log('Source Filter:', JSON.stringify(config.sourceFilter));
-    console.log('Process Time Source ID:', config.processTimeSourceId);
-    console.log('============================');
-    
-    const cookies = await loginToCRM(session);
-    
-    if (!cookies || cookies.length === 0) {
-      console.error('ERROR: Failed to get cookies for session:', session);
-      throw new Error(`Authentication failed for session: ${session}`);
-    }
-    
-    console.log('Login successful for session:', session, 'User:', config.login);
+    const cookies = await loginToCRM();
+
+    console.log('=== Login process completed ===');
+    console.log('Cookies obtained:', cookies ? 'Yes' : 'No');
     console.log('Cookies length:', cookies.length);
 
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Строим URL для отфильтрованных данных
-    const sourceParams = config.sourceFilter.map(source => 
-      `filter_event_uservoip_que_source%5B%5D=${encodeURIComponent(source)}`
-    ).join('&');
-    
-    const filteredPageUrl = `https://datapoint.center/admin/report/desiner/101/view/?filter_order_cdatetype=now&filter_order_cdateperiod=mday&filter_user_roleid%5B%5D=${config.roleId}&filter_user_manageronline=online&${sourceParams}&filter_event_uservoip_que_sourcechild=1&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
-    const totalPageUrl = `https://datapoint.center/admin/report/desiner/101/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_user_manageronline=online&filter_event_uservoip_que_sourcechild=1&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
-    const processTimeUrl = `https://datapoint.center/admin/report/desiner/132/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_order_sourceid%5B%5D=${config.processTimeSourceId}&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
+    if (!cookies) {
+      throw new Error('Failed to authenticate');
+    }
 
-    console.log('=== URL Configuration ===');
-    console.log('Session:', session);
-    console.log('Role ID:', config.roleId);
-    console.log('Source Filter:', config.sourceFilter);
-    console.log('Process Time Source ID:', config.processTimeSourceId);
-    console.log('Source Params:', sourceParams);
-    console.log('Filtered URL:', filteredPageUrl);
-    console.log('Process Time URL:', processTimeUrl);
+    const today = new Date().toISOString().split('T')[0];
+    const filteredPageUrl = `https://datapoint.center/admin/report/desiner/101/view/?filter_order_cdatetype=now&filter_order_cdateperiod=mday&filter_user_roleid%5B%5D=39&filter_user_manageronline=online&filter_event_uservoip_que_source%5B%5D=%D0%9B%D0%95%D0%9D%D0%94%D0%98%D0%9D%D0%93&filter_event_uservoip_que_source%5B%5D=%D0%A1%D0%B0%D0%B9%D1%82%D1%8B&filter_event_uservoip_que_sourcechild=1&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
+    const totalPageUrl = `https://datapoint.center/admin/report/desiner/101/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_user_manageronline=online&filter_event_uservoip_que_sourcechild=1&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
+    const processTimeUrl = `https://datapoint.center/admin/report/desiner/132/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_order_sourceid%5B%5D=60&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
+
     console.log('=== Fetching filtered data ===');
     const filteredResponse = await fetch(filteredPageUrl, {
       headers: {
@@ -463,16 +384,6 @@ Deno.serve(async (req: Request) => {
     console.log('Filtered response status:', filteredResponse.status);
     console.log('Total response status:', totalResponse.status);
     console.log('Process time response status:', processTimeResponse.status);
-    console.log('Filtered data length:', filteredData.length);
-    console.log('Total data length:', totalData.length);
-    console.log('Process time data length:', processTimeData.length);
-    
-    // Проверяем, что данные содержат ожидаемые фильтры
-    if (session === 'diar') {
-      console.log('Checking for ДИАР in filtered data:', filteredData.includes('ДИАР'));
-    } else if (session === 'rozpakuj') {
-      console.log('Checking for Розпакуй in filtered data:', filteredData.includes('Розпакуй') || filteredData.includes('Розпакуй'));
-    }
 
     if (debug) {
       return new Response(JSON.stringify({
@@ -492,19 +403,9 @@ Deno.serve(async (req: Request) => {
     const parsedTotal = parseTableData(totalData);
     const processTimeIntervals = parseProcessTimeData(processTimeData);
 
-    console.log('=== PARSED DATA ===');
-    console.log('Session used:', session);
-    console.log('Config used:', {
-      login: config.login,
-      roleId: config.roleId,
-      sourceFilter: config.sourceFilter
-    });
-    console.log('Parsed filtered orders:', parsedFiltered.orders);
-    console.log('Parsed total orders:', parsedTotal.orders);
     console.log('Parsed filtered data:', JSON.stringify(parsedFiltered));
     console.log('Parsed total data:', JSON.stringify(parsedTotal));
     console.log('Parsed process time intervals:', JSON.stringify(processTimeIntervals));
-    console.log('===================');
 
     const result: MetricData = {
       orders: {
