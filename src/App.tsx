@@ -44,13 +44,11 @@ function App() {
   const fetchData = async (debug = false) => {
     try {
       setError(null);
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-crm-data?session=${session}${debug ? '&debug=true' : ''}`;
+      // Используем локальный API вместо Supabase
+      const apiUrl = `/api/parse-crm-data.php?session=${session}${debug ? '&debug=true' : ''}`;
       console.log('Fetching data for session:', session);
       console.log('API URL:', apiUrl);
       const response = await fetch(apiUrl, {
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
         cache: 'no-store', // Отключаем кэширование
       });
 
