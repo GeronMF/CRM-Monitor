@@ -125,6 +125,18 @@ function App() {
                 {lastUpdate.toLocaleTimeString('ru-RU')}
               </p>
             )}
+            <a
+              href="/crm-monitor/diar/"
+              className="flex items-center gap-1.5 sm:gap-2 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 hover:text-cyan-300 backdrop-blur-sm font-medium py-2 px-3 sm:py-2.5 sm:px-4 rounded-lg transition-all border border-slate-700/50 hover:border-cyan-500/30 text-sm"
+            >
+              <span>ДИАР</span>
+            </a>
+            <a
+              href="/crm-monitor/rozpakuy/"
+              className="flex items-center gap-1.5 sm:gap-2 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 hover:text-cyan-300 backdrop-blur-sm font-medium py-2 px-3 sm:py-2.5 sm:px-4 rounded-lg transition-all border border-slate-700/50 hover:border-cyan-500/30 text-sm"
+            >
+              <span>Розпакуй</span>
+            </a>
             <button
               onClick={() => fetchData(false)}
               className="flex items-center gap-1.5 sm:gap-2 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 hover:text-cyan-300 backdrop-blur-sm font-medium py-2 px-3 sm:py-2.5 sm:px-4 rounded-lg transition-all border border-slate-700/50 hover:border-cyan-500/30 text-sm"
