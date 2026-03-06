@@ -1,4 +1,4 @@
-const CACHE_NAME = 'crm-monitor-v1';
+const CACHE_NAME = 'crm-monitor-v2';
 const BASE_PATH = '/crm-monitor';
 const urlsToCache = [
   `${BASE_PATH}/`,
@@ -16,6 +16,13 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Не кэшируем API запросы - всегда делаем свежий запрос
+  if (event.request.url.includes('/api/parse-crm-data')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
+  // Для остальных запросов используем кэш
   event.respondWith(
     caches.match(event.request)
       .then((response) => response || fetch(event.request))
