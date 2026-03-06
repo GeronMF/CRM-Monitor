@@ -1,0 +1,48 @@
+═══════════════════════════════════════════════════════════════
+НАСТРОЙКА GITHUB ACTIONS - БЫСТРАЯ ИНСТРУКЦИЯ
+═══════════════════════════════════════════════════════════════
+
+1. СОЗДАЙТЕ SSH КЛЮЧ (если еще нет):
+   
+   В PowerShell или Git Bash:
+   ssh-keygen -t rsa -b 4096 -C "github-actions"
+   (Нажмите Enter для всех вопросов)
+
+2. ДОБАВЬТЕ ПУБЛИЧНЫЙ КЛЮЧ НА СЕРВЕР:
+   
+   В PowerShell:
+   type $env:USERPROFILE\.ssh\id_rsa.pub | ssh -p 32762 aiecom_uploadspace@decloud2376.zahid.host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+   
+   Или вручную:
+   - Скопируйте содержимое файла: C:\Users\ВашПользователь\.ssh\id_rsa.pub
+   - Подключитесь к серверу: ssh -p 32762 aiecom_uploadspace@decloud2376.zahid.host
+   - Выполните: mkdir -p ~/.ssh && echo "ВАШ_ПУБЛИЧНЫЙ_КЛЮЧ" >> ~/.ssh/authorized_keys
+   - chmod 600 ~/.ssh/authorized_keys
+
+3. ДОБАВЬТЕ СЕКРЕТЫ В GITHUB:
+   
+   Перейдите: https://github.com/GeronMF/CRM-Monitor/settings/secrets/actions
+   
+   Добавьте секреты:
+   
+   SSH_HOST = decloud2376.zahid.host
+   SSH_PORT = 32762
+   SSH_USER = aiecom_uploadspace
+   SSH_PRIVATE_KEY = (содержимое файла C:\Users\ВашПользователь\.ssh\id_rsa)
+   DEPLOY_PATH = /home/aiecom_uploadspace/www
+   VITE_SUPABASE_URL = (ваш URL Supabase)
+   VITE_SUPABASE_ANON_KEY = (ваш ключ Supabase)
+
+4. ЗАПУШЬТЕ ИЗМЕНЕНИЯ:
+   
+   git add .
+   git commit -m "Add GitHub Actions deployment"
+   git push origin main
+
+5. ПРОВЕРЬТЕ:
+   
+   - Откройте: https://github.com/GeronMF/CRM-Monitor/actions
+   - Дождитесь завершения деплоя
+   - Проверьте сайт: https://ai.ecom-upload.space/crm-monitor
+
+═══════════════════════════════════════════════════════════════

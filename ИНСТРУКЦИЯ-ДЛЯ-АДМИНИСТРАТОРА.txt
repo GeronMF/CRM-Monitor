@@ -1,0 +1,41 @@
+═══════════════════════════════════════════════════════════════
+ИНСТРУКЦИЯ ДЛЯ АДМИНИСТРАТОРА СЕРВЕРА
+═══════════════════════════════════════════════════════════════
+
+Нужно развернуть проект CRM Monitor в поддиректории /crm-monitor 
+на домене ai.ecom-upload.space
+
+ШАГ 1: Размещение файлов
+─────────────────────────
+Скопируйте файлы из папки dist/ в директорию:
+/var/www/ai.ecom-upload.space/crm-monitor/
+
+(Или в другую директорию, если у вас другая структура)
+
+ШАГ 2: Конфигурация Nginx
+──────────────────────────
+Добавьте следующий блок в конфигурацию Nginx для домена ai.ecom-upload.space
+(в блок server для порта 443):
+
+location /crm-monitor {
+    alias /var/www/ai.ecom-upload.space/crm-monitor;
+    try_files $uri $uri/ /crm-monitor/index.html;
+    
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+    
+    location ~* \.html$ {
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+    }
+}
+
+ШАГ 3: Применение изменений
+────────────────────────────
+nginx -t
+systemctl reload nginx
+
+═══════════════════════════════════════════════════════════════
