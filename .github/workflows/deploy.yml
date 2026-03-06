@@ -33,16 +33,45 @@ jobs:
       - name: Build DIAR
         run: |
           cp src/main-diar.tsx src/main.tsx
-          sed -i 's|base: '\''/crm-monitor/'\''|base: '\''/crm-monitor/diar/'\''|g' vite.config.ts
+          cat > vite.config.ts << 'EOF'
+          import { defineConfig } from 'vite';
+          import react from '@vitejs/plugin-react';
+          
+          export default defineConfig({
+            plugins: [react()],
+            base: '/crm-monitor/diar/',
+            build: {
+              rollupOptions: {
+                output: {
+                  manualChunks: undefined,
+                },
+              },
+            },
+          });
+          EOF
           npm run build
           mv dist dist-diar
-          cp src/main.tsx.backup src/main.tsx 2>/dev/null || true
-          git checkout vite.config.ts
+          git checkout src/main.tsx vite.config.ts
       
       - name: Build Rozpakuj
         run: |
           cp src/main-rozpakuj.tsx src/main.tsx
-          sed -i 's|base: '\''/crm-monitor/'\''|base: '\''/crm-monitor/rozpakuy/'\''|g' vite.config.ts
+          cat > vite.config.ts << 'EOF'
+          import { defineConfig } from 'vite';
+          import react from '@vitejs/plugin-react';
+          
+          export default defineConfig({
+            plugins: [react()],
+            base: '/crm-monitor/rozpakuy/',
+            build: {
+              rollupOptions: {
+                output: {
+                  manualChunks: undefined,
+                },
+              },
+            },
+          });
+          EOF
           npm run build
           mv dist dist-rozpakuj
           git checkout src/main.tsx vite.config.ts
