@@ -321,7 +321,7 @@ function calculatePercentage($value, $total) {
 }
 
 // Функция выполнения запроса с повторными попытками
-function fetchWithRetry($url, $cookies, $cookieFile, $maxRetries = 3) {
+function fetchWithRetry($url, $cookies, $cookieFile, $maxRetries = 3, $isProcessTime = false) {
     for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -348,12 +348,22 @@ function fetchWithRetry($url, $cookies, $cookieFile, $maxRetries = 3) {
         curl_close($ch);
         
         if ($httpCode === 200 && !empty($data) && strlen($data) > 1000) {
-            // Проверяем, что HTML содержит нужные данные
-            if (strpos($data, 'Кол-во заказов') !== false || strpos($data, 'Сумма заказов') !== false) {
-                error_log("Successfully fetched data on attempt $attempt, length: " . strlen($data));
-                return $data;
+            // Для страницы времени обработки проверяем наличие таблицы
+            if ($isProcessTime) {
+                if (strpos($data, 'shop-table') !== false || strpos($data, '<table') !== false) {
+                    error_log("Successfully fetched process time data on attempt $attempt, length: " . strlen($data));
+                    return $data;
+                } else {
+                    error_log("Attempt $attempt: Process time HTML doesn't contain table");
+                }
             } else {
-                error_log("Attempt $attempt: HTML doesn't contain expected data markers");
+                // Для обычных страниц проверяем наличие метрик
+                if (strpos($data, 'Кол-во заказов') !== false || strpos($data, 'Сумма заказов') !== false) {
+                    error_log("Successfully fetched data on attempt $attempt, length: " . strlen($data));
+                    return $data;
+                } else {
+                    error_log("Attempt $attempt: HTML doesn't contain expected data markers");
+                }
             }
         } else {
             error_log("Attempt $attempt failed: HTTP code: $httpCode, Error: $error, Data length: " . strlen($data));
@@ -430,7 +440,7 @@ try {
         
         // Получаем данные о времени обработки
         if (!$processTimeData) {
-            $processTimeData = fetchWithRetry($processTimeUrl, $cookies, $cookieFile, 2);
+            $processTimeData = fetchWithRetry($processTimeUrl, $cookies, $cookieFile, 2, true);
         }
         
         // Если все данные получены, проверяем валидность
