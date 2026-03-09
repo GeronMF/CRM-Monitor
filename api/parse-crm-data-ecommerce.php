@@ -502,10 +502,22 @@ try {
     @unlink($cookieFile);
     
     if ($debug) {
+        // В debug стараемся отдать именно HTML таблицы со скоростью обработки,
+        // чтобы не возить весь огромный документ.
+        $processTimePreview = '';
+        if (!empty($processTimeData) && preg_match('/<table[^>]*class="[^"]*shop-table[^"]*"[^>]*>([\\s\\S]*?)<\\/table>/i', $processTimeData, $m)) {
+            $processTimePreview = $m[0];
+        } else {
+            $processTimePreview = (string)$processTimeData;
+        }
+        if (strlen($processTimePreview) > 8000) {
+            $processTimePreview = substr($processTimePreview, 0, 8000);
+        }
+
         echo json_encode([
             'filteredHtml' => substr($filteredData, 0, 1000),
             'totalHtml' => substr($totalData, 0, 1000),
-            'processTimeHtml' => substr($processTimeData, 0, 8000),
+            'processTimeHtml' => $processTimePreview,
             'cookies' => $cookies,
             'session' => 'ecommerce',
             'config' => $config,
