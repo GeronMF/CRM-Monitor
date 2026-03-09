@@ -261,47 +261,61 @@ function parseProcessTimeData(html: string): TimeInterval[] {
     '120+ мин': 0
   };
 
+  const parsedData: Array<{ minutes: number; count: number }> = [];
+
   try {
     console.log('=== Starting process time parsing ===');
 
     const tableMatch = html.match(/<table[^>]*class="[^"]*shop-table[^"]*"[^>]*>([\s\S]*?)<\/table>/i);
-    if (!tableMatch) {
-      console.log('Error: table.shop-table not found');
-      return Object.keys(groups).map(label => ({ label, count: 0, percentage: 0 }));
-    }
+    if (tableMatch) {
+      const tableHtml = tableMatch[1];
+      console.log('Found table.shop-table');
 
-    const tableHtml = tableMatch[1];
-    console.log('Found table.shop-table');
+      const trMatches = tableHtml.matchAll(/<tr([^>]*)>([\s\S]*?)<\/tr>/gi);
+      let processedRows = 0;
 
-    const trMatches = tableHtml.matchAll(/<tr([^>]*)>([\s\S]*?)<\/tr>/gi);
+      for (const trMatch of trMatches) {
+        const trAttrs = trMatch[1];
+        const trContent = trMatch[2];
 
-    let processedRows = 0;
-    const parsedData: Array<{ minutes: number; count: number }> = [];
+        const hasOnclick = /onclick\s*=/i.test(trAttrs);
+        const hasDataGroup = /data-group\s*=/i.test(trAttrs);
 
-    for (const trMatch of trMatches) {
-      const trAttrs = trMatch[1];
-      const trContent = trMatch[2];
+        if (hasOnclick && !hasDataGroup) {
+          processedRows++;
+          const text = trContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
-      const hasOnclick = /onclick\s*=/i.test(trAttrs);
-      const hasDataGroup = /data-group\s*=/i.test(trAttrs);
-
-      if (hasOnclick && !hasDataGroup) {
-        processedRows++;
-        const text = trContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-
-        const match = text.match(/^(\d+)\s+\((\d+)\s+процессов\)$/);
-        if (match) {
-          const minutes = parseInt(match[1]);
-          const count = parseInt(match[2]);
-
-          parsedData.push({ minutes, count });
-          console.log(`Found row: ${minutes} мин (${count} процессов)`);
+          const match = text.match(/^(\d+)\s+\((\d+)\s+процессов\)$/);
+          if (match) {
+            parsedData.push({ minutes: parseInt(match[1]), count: parseInt(match[2]) });
+            console.log(`Found row: ${match[1]} мин (${match[2]} процессов)`);
+          }
         }
       }
+
+      console.log(`Total level-1 rows found: ${processedRows}`);
+      console.log(`Parsed data entries: ${parsedData.length}`);
+
+      if (parsedData.length === 0) {
+        const tableText = tableHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const fallbackMatches = tableText.matchAll(/(\d+)\s*\((\d+)\s+процес[а-яA-Я]*\)/gi);
+        for (const m of fallbackMatches) {
+          parsedData.push({ minutes: parseInt(m[1]), count: parseInt(m[2]) });
+        }
+        if (parsedData.length > 0) console.log(`Found ${parsedData.length} entries via table fallback`);
+      }
+    } else {
+      console.log('Error: table.shop-table not found, will try full-HTML fallback');
     }
 
-    console.log(`Total level-1 rows found: ${processedRows}`);
-    console.log(`Parsed data entries: ${parsedData.length}`);
+    if (parsedData.length === 0) {
+      const fullText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const fullMatches = fullText.matchAll(/(\d+)\s*\((\d+)\s+процес[а-яA-Я]*\)/gi);
+      for (const m of fullMatches) {
+        parsedData.push({ minutes: parseInt(m[1]), count: parseInt(m[2]) });
+      }
+      if (parsedData.length > 0) console.log(`Found ${parsedData.length} entries via full-HTML fallback`);
+    }
 
     parsedData.forEach(({ minutes, count }) => {
       if (minutes <= 5) groups['0–5 мин'] += count;

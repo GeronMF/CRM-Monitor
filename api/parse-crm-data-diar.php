@@ -311,18 +311,30 @@ function parseProcessTimeData($html) {
                 error_log("parseProcessTimeData: Fallback pattern also found nothing");
             }
         }
-
-        foreach ($parsedEntries as [$minutes, $count]) {
-            if ($minutes <= 5) $groups['0–5 мин'] += $count;
-            elseif ($minutes <= 10) $groups['5–10 мин'] += $count;
-            elseif ($minutes <= 15) $groups['10–15 мин'] += $count;
-            elseif ($minutes <= 30) $groups['15–30 мин'] += $count;
-            elseif ($minutes <= 60) $groups['30–60 мин'] += $count;
-            elseif ($minutes <= 120) $groups['60–120 мин'] += $count;
-            else $groups['120+ мин'] += $count;
-        }
     } else {
         error_log("parseProcessTimeData: Table with class 'shop-table' not found");
+    }
+
+    // Если таблица не найдена или по таблице ничего не вытащили — ищем по всему HTML
+    if (empty($parsedEntries)) {
+        $plainText = preg_replace('/<[^>]+>/', ' ', $html);
+        $plainText = preg_replace('/\s+/', ' ', trim($plainText));
+        if (preg_match_all('/(\d+)\s*\((\d+)\s+процес[а-яA-Я]*\)/u', $plainText, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $m) {
+                $parsedEntries[] = [(int) $m[1], (int) $m[2]];
+            }
+            error_log("parseProcessTimeData: Found " . count($parsedEntries) . " entries via full-HTML fallback");
+        }
+    }
+
+    foreach ($parsedEntries as [$minutes, $count]) {
+        if ($minutes <= 5) $groups['0–5 мин'] += $count;
+        elseif ($minutes <= 10) $groups['5–10 мин'] += $count;
+        elseif ($minutes <= 15) $groups['10–15 мин'] += $count;
+        elseif ($minutes <= 30) $groups['15–30 мин'] += $count;
+        elseif ($minutes <= 60) $groups['30–60 мин'] += $count;
+        elseif ($minutes <= 120) $groups['60–120 мин'] += $count;
+        else $groups['120+ мин'] += $count;
     }
     
     $total = array_sum($groups);
@@ -516,7 +528,8 @@ try {
     
     if ($debug) {
         $processTimePreview = '';
-        if (!empty($processTimeData) && preg_match('/<table[^>]*class="[^"]*shop-table[^"]*"[^>]*>([\\s\\S]*?)<\\/table>/i', $processTimeData, $m)) {
+        $processTimeTableFound = !empty($processTimeData) && (bool) preg_match('/<table[^>]*class="[^"]*shop-table[^"]*"[^>]*>/i', $processTimeData);
+        if (!empty($processTimeData) && preg_match('/<table[^>]*class="[^"]*shop-table[^"]*"[^>]*>([\s\S]*?)<\/table>/i', $processTimeData, $m)) {
             $processTimePreview = $m[0];
         } else {
             $processTimePreview = (string)$processTimeData;
@@ -524,11 +537,16 @@ try {
         if (strlen($processTimePreview) > 8000) {
             $processTimePreview = substr($processTimePreview, 0, 8000);
         }
+        $processTimeIntervalsDebug = parseProcessTimeData($processTimeData);
+        $processTimeEntriesCount = (int) array_sum(array_column($processTimeIntervalsDebug, 'count'));
 
         echo json_encode([
             'filteredHtml' => substr($filteredData, 0, 1000),
             'totalHtml' => substr($totalData, 0, 1000),
             'processTimeHtml' => $processTimePreview,
+            'processTimeTableFound' => $processTimeTableFound,
+            'processTimeEntriesCount' => $processTimeEntriesCount,
+            'processTimeIntervals' => $processTimeIntervalsDebug,
             'cookies' => $cookies,
             'session' => 'diar',
             'config' => $config,
