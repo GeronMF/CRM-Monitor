@@ -33,6 +33,15 @@ interface MetricData {
   processTimeIntervals: TimeInterval[];
 }
 
+// Конфигурация для Трансляции канала Розпакуй
+const CONFIG = {
+  login: 'Zaharchenko',
+  password: 'Zaharchenko1234',
+  roleId: '9',
+  sourceFilter: ['Трансляция канала Розпакуй ТВ'],
+  processTimeSourceId: '65',
+};
+
 async function loginToCRM(): Promise<string> {
   try {
     const loginUrl = 'https://datapoint.center/';
@@ -66,8 +75,8 @@ async function loginToCRM(): Promise<string> {
     console.log('Initial cookies count:', cookies.length);
 
     const formData = new FormData();
-    formData.append('auth_login', 'German');
-    formData.append('auth_password', 'K9#bT2!mQ8vX*zL4');
+    formData.append('auth_login', CONFIG.login);
+    formData.append('auth_password', CONFIG.password);
 
     console.log('Step 2: Submitting login form...');
     const loginResponse = await fetch(loginUrl, {
@@ -331,7 +340,7 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     const debug = url.searchParams.get('debug') === 'true';
 
-    console.log('=== Starting CRM data fetch ===');
+    console.log('=== Starting ROZPAKUJ CRM data fetch ===');
     const cookies = await loginToCRM();
 
     console.log('=== Login process completed ===');
@@ -343,9 +352,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    const filteredPageUrl = `https://datapoint.center/admin/report/desiner/101/view/?filter_order_cdatetype=now&filter_order_cdateperiod=mday&filter_user_roleid%5B%5D=39&filter_user_manageronline=online&filter_event_uservoip_que_source%5B%5D=%D0%9B%D0%95%D0%9D%D0%94%D0%98%D0%9D%D0%93&filter_event_uservoip_que_source%5B%5D=%D0%A1%D0%B0%D0%B9%D1%82%D1%8B&filter_event_uservoip_que_sourcechild=1&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
+    
+    // Формируем URL с фильтрами для Трансляции канала Розпакуй
+    const sourceParams = CONFIG.sourceFilter.map(s => `filter_event_uservoip_que_source%5B%5D=${encodeURIComponent(s)}`).join('&');
+    const filteredPageUrl = `https://datapoint.center/admin/report/desiner/101/view/?filter_order_cdatetype=now&filter_order_cdateperiod=mday&filter_user_roleid%5B%5D=${CONFIG.roleId}&filter_user_manageronline=online&${sourceParams}&filter_event_uservoip_que_sourcechild=1&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
     const totalPageUrl = `https://datapoint.center/admin/report/desiner/101/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_user_manageronline=online&filter_event_uservoip_que_sourcechild=1&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
-    const processTimeUrl = `https://datapoint.center/admin/report/desiner/132/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_order_sourceid%5B%5D=60&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
+    const processTimeUrl = `https://datapoint.center/admin/report/desiner/132/view/?filter_order_cdatefrom=${today}&filter_order_cdateto=${today}&filter_order_sourceid%5B%5D=${CONFIG.processTimeSourceId}&templateid=&ok=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%BE%D0%B2%D0%B0%D1%82%D1%8C`;
 
     console.log('=== Fetching filtered data ===');
     const filteredResponse = await fetch(filteredPageUrl, {

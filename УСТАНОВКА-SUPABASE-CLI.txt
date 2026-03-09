@@ -1,0 +1,40 @@
+УСТАНОВКА SUPABASE CLI ДЛЯ WINDOWS
+===================================
+
+ВАРИАНТ 1: Через winget (рекомендуется для Windows)
+----------------------------------------------------
+winget install --id=Supabase.CLI -e
+
+ВАРИАНТ 2: Через Scoop
+----------------------
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
+
+ВАРИАНТ 3: Через npx (без установки)
+-------------------------------------
+# Можно использовать npx для запуска команд без установки:
+npx supabase@latest login
+npx supabase@latest link --project-ref ВАШ_PROJECT_REF
+npx supabase@latest functions deploy parse-crm-data-ecommerce
+
+ВАРИАНТ 4: Скачать вручную
+---------------------------
+1. Перейдите: https://github.com/supabase/cli/releases
+2. Скачайте последнюю версию для Windows (supabase_X.X.X_windows_amd64.zip)
+3. Распакуйте и добавьте в PATH
+
+ПОСЛЕ УСТАНОВКИ:
+----------------
+1. Проверьте установку:
+   supabase --version
+
+2. Войдите в Supabase:
+   supabase login
+
+3. Подключитесь к проекту:
+   supabase link --project-ref ВАШ_PROJECT_REF
+
+4. Разверните функции:
+   supabase functions deploy parse-crm-data-ecommerce
+   supabase functions deploy parse-crm-data-diar
+   supabase functions deploy parse-crm-data-rozpakuj

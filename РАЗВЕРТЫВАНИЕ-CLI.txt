@@ -1,0 +1,58 @@
+РАЗВЕРТЫВАНИЕ ФУНКЦИЙ ЧЕРЕЗ CLI
+================================
+
+ШАГ 1: Установка Supabase CLI
+------------------------------
+npm install -g supabase
+
+ШАГ 2: Вход в Supabase
+-----------------------
+supabase login
+
+(Откроется браузер для авторизации)
+
+ШАГ 3: Подключение к проекту
+------------------------------
+# Узнайте project-ref из URL вашего проекта Supabase
+# Например, если URL: https://fhkccxgqbvbuvyraipyv.supabase.co
+# То project-ref: fhkccxgqbvbuvyraipyv
+
+supabase link --project-ref ВАШ_PROJECT_REF
+
+# Если у вас проект awangomqhrqmljoetgta:
+supabase link --project-ref awangomqhrqmljoetgta
+
+# Если у вас проект fhkccxgqbvbuvyraipyv:
+supabase link --project-ref fhkccxgqbvbuvyraipyv
+
+ШАГ 4: Развертывание функций
+-----------------------------
+# Перейдите в папку проекта
+cd "C:\Projects\CRM Monitor"
+
+# Развертывание E-commerce
+supabase functions deploy parse-crm-data-ecommerce
+
+# Развертывание ДИАР
+supabase functions deploy parse-crm-data-diar
+
+# Развертывание Трансляции
+supabase functions deploy parse-crm-data-rozpakuj
+
+ШАГ 5: Проверка
+---------------
+После развертывания функции будут доступны по URL:
+https://ВАШ_PROJECT_REF.supabase.co/functions/v1/parse-crm-data-ecommerce
+https://ВАШ_PROJECT_REF.supabase.co/functions/v1/parse-crm-data-diar
+https://ВАШ_PROJECT_REF.supabase.co/functions/v1/parse-crm-data-rozpakuj
+
+ВАЖНО:
+------
+1. Убедитесь, что папки с функциями существуют:
+   - supabase/functions/parse-crm-data-ecommerce/
+   - supabase/functions/parse-crm-data-diar/
+   - supabase/functions/parse-crm-data-rozpakuj/
+
+2. В каждой папке должен быть файл index.ts
+
+3. После развертывания обновите URL в коде фронтенда, если project-ref отличается

@@ -1,0 +1,48 @@
+РАЗВЕРТЫВАНИЕ EDGE FUNCTIONS В SUPABASE
+========================================
+
+БЫСТРЫЙ СПОСОБ (через Dashboard):
+----------------------------------
+
+1. Откройте: https://supabase.com/dashboard/project/awangomqhrqmljoetgta
+2. Edge Functions → Create a new function
+
+3. Функция 1: parse-crm-data-ecommerce
+   - Скопируйте код из: supabase/functions/parse-crm-data-ecommerce/index.ts
+   - Вставьте в Supabase Dashboard
+   - Deploy
+
+4. Функция 2: parse-crm-data-diar
+   - Скопируйте код из: supabase/functions/parse-crm-data-diar/index.ts
+   - Вставьте в Supabase Dashboard
+   - Deploy
+
+5. Функция 3: parse-crm-data-rozpakuj
+   - Скопируйте код из: supabase/functions/parse-crm-data-rozpakuj/index.ts
+   - Вставьте в Supabase Dashboard
+   - Deploy
+
+ЧЕРЕЗ CLI:
+----------
+
+npm install -g supabase
+supabase login
+supabase link --project-ref awangomqhrqmljoetgta
+
+supabase functions deploy parse-crm-data-ecommerce
+supabase functions deploy parse-crm-data-diar
+supabase functions deploy parse-crm-data-rozpakuj
+
+ПРОВЕРКА:
+---------
+
+URL функций:
+- E-commerce: https://awangomqhrqmljoetgta.supabase.co/functions/v1/parse-crm-data-ecommerce
+- ДИАР: https://awangomqhrqmljoetgta.supabase.co/functions/v1/parse-crm-data-diar
+- Трансляция: https://awangomqhrqmljoetgta.supabase.co/functions/v1/parse-crm-data-rozpakuj
+
+ВАЖНО:
+------
+- Убедитесь, что в .env есть VITE_SUPABASE_ANON_KEY
+- После развертывания пересоберите фронтенд: npm run build
+- Задеплойте обновленный фронтенд
