@@ -259,6 +259,8 @@ function parseProcessTimeData($html) {
     ];
     
     error_log("parseProcessTimeData: HTML length = " . strlen($html));
+
+    $parsedEntries = [];
     
     if (preg_match('/<table[^>]*class="[^"]*shop-table[^"]*"[^>]*>([\s\S]*?)<\/table>/i', $html, $tableMatch)) {
         error_log("parseProcessTimeData: Table found");
@@ -277,25 +279,46 @@ function parseProcessTimeData($html) {
                     $text = preg_replace('/<[^>]+>/', ' ', $trContent);
                     $text = preg_replace('/\s+/', ' ', trim($text));
                     
-                    if (preg_match('/^(\d+)\s+\((\d+)\s+процессов\)$/', $text, $match)) {
+                    // Строгий паттерн (как было раньше)
+                    if (preg_match('/^(\d+)\s+\((\d+)\s+процессов\)$/u', $text, $match)) {
                         $minutes = (int) $match[1];
                         $count = (int) $match[2];
-                        error_log("parseProcessTimeData: Found process time - minutes: $minutes, count: $count");
-                        
-                        if ($minutes <= 5) $groups['0–5 мин'] += $count;
-                        elseif ($minutes <= 10) $groups['5–10 мин'] += $count;
-                        elseif ($minutes <= 15) $groups['10–15 мин'] += $count;
-                        elseif ($minutes <= 30) $groups['15–30 мин'] += $count;
-                        elseif ($minutes <= 60) $groups['30–60 мин'] += $count;
-                        elseif ($minutes <= 120) $groups['60–120 мин'] += $count;
-                        else $groups['120+ мин'] += $count;
+                        $parsedEntries[] = [$minutes, $count];
+                        error_log("parseProcessTimeData: Found process time (strict) - minutes: $minutes, count: $count");
                     } else {
-                        error_log("parseProcessTimeData: Text doesn't match pattern: " . substr($text, 0, 100));
+                        error_log("parseProcessTimeData: Text doesn't match strict pattern: " . substr($text, 0, 100));
                     }
                 }
             }
         } else {
             error_log("parseProcessTimeData: No table rows found");
+        }
+
+        // Если ничего не нашли строгим паттерном — пробуем мягкий поиск по тексту всей таблицы
+        if (empty($parsedEntries)) {
+            $plainText = preg_replace('/<[^>]+>/', ' ', $tableHtml);
+            $plainText = preg_replace('/\s+/', ' ', trim($plainText));
+
+            if (preg_match_all('/(\d+)\s*\((\d+)\s+процес[а-яA-Я]*\)/u', $plainText, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $m) {
+                    $minutes = (int) $m[1];
+                    $count = (int) $m[2];
+                    $parsedEntries[] = [$minutes, $count];
+                    error_log("parseProcessTimeData: Found process time (fallback) - minutes: $minutes, count: $count");
+                }
+            } else {
+                error_log("parseProcessTimeData: Fallback pattern also found nothing");
+            }
+        }
+
+        foreach ($parsedEntries as [$minutes, $count]) {
+            if ($minutes <= 5) $groups['0–5 мин'] += $count;
+            elseif ($minutes <= 10) $groups['5–10 мин'] += $count;
+            elseif ($minutes <= 15) $groups['10–15 мин'] += $count;
+            elseif ($minutes <= 30) $groups['15–30 мин'] += $count;
+            elseif ($minutes <= 60) $groups['30–60 мин'] += $count;
+            elseif ($minutes <= 120) $groups['60–120 мин'] += $count;
+            else $groups['120+ мин'] += $count;
         }
     } else {
         error_log("parseProcessTimeData: Table with class 'shop-table' not found");
@@ -443,8 +466,9 @@ try {
             $processTimeData = fetchWithRetry($processTimeUrl, $cookies, $cookieFile, 2, true);
         }
         
-        // Если все данные получены, проверяем валидность
-        if ($filteredData && $totalData && $processTimeData) {
+        // Успешность цикла зависит только от основных отчётов (filtered/total),
+        // отсутствие данных по скорости не должно ломать весь запрос.
+        if ($filteredData && $totalData) {
             $parsedFiltered = parseTableData($filteredData);
             $parsedTotal = parseTableData($totalData);
             
@@ -471,7 +495,7 @@ try {
                 }
             }
         } else {
-            error_log("Attempt $attempt: Failed to fetch all data");
+            error_log("Attempt $attempt: Failed to fetch filtered or total data");
             if ($attempt < $maxAttempts) {
                 sleep(1);
             }
@@ -493,7 +517,7 @@ try {
         echo json_encode([
             'filteredHtml' => substr($filteredData, 0, 1000),
             'totalHtml' => substr($totalData, 0, 1000),
-            'processTimeHtml' => substr($processTimeData, 0, 1000),
+            'processTimeHtml' => substr($processTimeData, 0, 8000),
             'cookies' => $cookies,
             'session' => 'rozpakuj',
             'config' => $config,

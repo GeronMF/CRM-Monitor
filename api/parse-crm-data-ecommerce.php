@@ -257,6 +257,8 @@ function parseProcessTimeData($html) {
         '60–120 мин' => 0,
         '120+ мин' => 0
     ];
+
+    $parsedEntries = [];
     
     if (preg_match('/<table[^>]*class="[^"]*shop-table[^"]*"[^>]*>([\s\S]*?)<\/table>/i', $html, $tableMatch)) {
         $tableHtml = $tableMatch[1];
@@ -273,20 +275,40 @@ function parseProcessTimeData($html) {
                     $text = preg_replace('/<[^>]+>/', ' ', $trContent);
                     $text = preg_replace('/\s+/', ' ', trim($text));
                     
-                    if (preg_match('/^(\d+)\s+\((\d+)\s+процессов\)$/', $text, $match)) {
+                    // Основной, более строгий паттерн (как было раньше)
+                    if (preg_match('/^(\d+)\s+\((\d+)\s+процессов\)$/u', $text, $match)) {
                         $minutes = (int) $match[1];
                         $count = (int) $match[2];
-                        
-                        if ($minutes <= 5) $groups['0–5 мин'] += $count;
-                        elseif ($minutes <= 10) $groups['5–10 мин'] += $count;
-                        elseif ($minutes <= 15) $groups['10–15 мин'] += $count;
-                        elseif ($minutes <= 30) $groups['15–30 мин'] += $count;
-                        elseif ($minutes <= 60) $groups['30–60 мин'] += $count;
-                        elseif ($minutes <= 120) $groups['60–120 мин'] += $count;
-                        else $groups['120+ мин'] += $count;
+                        $parsedEntries[] = [$minutes, $count];
                     }
                 }
             }
+        }
+
+        // Если строгий паттерн ничего не нашёл (как в ДИАР/Трансляции) —
+        // делаем более мягкий разбор: ищем "N (M процес…)" в тексте таблицы
+        if (empty($parsedEntries)) {
+            $plainText = preg_replace('/<[^>]+>/', ' ', $tableHtml);
+            $plainText = preg_replace('/\s+/', ' ', trim($plainText));
+
+            if (preg_match_all('/(\d+)\s*\((\d+)\s+процес[а-яA-Я]*\)/u', $plainText, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $m) {
+                    $minutes = (int) $m[1];
+                    $count = (int) $m[2];
+                    $parsedEntries[] = [$minutes, $count];
+                }
+            }
+        }
+
+        // Складываем по группам
+        foreach ($parsedEntries as [$minutes, $count]) {
+            if ($minutes <= 5) $groups['0–5 мин'] += $count;
+            elseif ($minutes <= 10) $groups['5–10 мин'] += $count;
+            elseif ($minutes <= 15) $groups['10–15 мин'] += $count;
+            elseif ($minutes <= 30) $groups['15–30 мин'] += $count;
+            elseif ($minutes <= 60) $groups['30–60 мин'] += $count;
+            elseif ($minutes <= 120) $groups['60–120 мин'] += $count;
+            else $groups['120+ мин'] += $count;
         }
     }
     
@@ -432,8 +454,9 @@ try {
             $processTimeData = fetchWithRetry($processTimeUrl, $cookies, $cookieFile, 2, true);
         }
         
-        // Если все данные получены, проверяем валидность
-        if ($filteredData && $totalData && $processTimeData) {
+        // Успех цикла зависит только от основных отчётов (filtered/total),
+        // скорость (processTime) не блокирует успешный результат.
+        if ($filteredData && $totalData) {
             $parsedFiltered = parseTableData($filteredData);
             $parsedTotal = parseTableData($totalData);
             
@@ -460,7 +483,7 @@ try {
                 }
             }
         } else {
-            error_log("Attempt $attempt: Failed to fetch all data");
+            error_log("Attempt $attempt: Failed to fetch filtered or total data");
             if ($attempt < $maxAttempts) {
                 sleep(1);
             }
@@ -482,7 +505,7 @@ try {
         echo json_encode([
             'filteredHtml' => substr($filteredData, 0, 1000),
             'totalHtml' => substr($totalData, 0, 1000),
-            'processTimeHtml' => substr($processTimeData, 0, 1000),
+            'processTimeHtml' => substr($processTimeData, 0, 8000),
             'cookies' => $cookies,
             'session' => 'ecommerce',
             'config' => $config,
