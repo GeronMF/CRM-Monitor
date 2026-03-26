@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/process-time-cache.php';
 $config = $crm_credentials['rozpakuj'];
 
 $debug = isset($_GET['debug']) && $_GET['debug'] === 'true';
@@ -351,6 +352,8 @@ function calculatePercentage($value, $total) {
 
 // Функция выполнения запроса с повторными попытками
 function fetchWithRetry($url, $cookies, $cookieFile, $maxRetries = 3, $isProcessTime = false) {
+    $timeoutTotal   = $isProcessTime ? 120 : 60;
+    $timeoutConnect = $isProcessTime ? 25 : 20;
     for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -358,8 +361,8 @@ function fetchWithRetry($url, $cookies, $cookieFile, $maxRetries = 3, $isProcess
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => $timeoutTotal,
+            CURLOPT_CONNECTTIMEOUT => $timeoutConnect,
             CURLOPT_COOKIEFILE => $cookieFile,
             CURLOPT_COOKIEJAR => $cookieFile,
             CURLOPT_HTTPHEADER => [
@@ -399,7 +402,7 @@ function fetchWithRetry($url, $cookies, $cookieFile, $maxRetries = 3, $isProcess
         }
         
         if ($attempt < $maxRetries) {
-            usleep(500000); // Задержка 0.5 секунды перед повтором
+            usleep($isProcessTime ? 1000000 : 750000);
         }
     }
     
@@ -452,24 +455,18 @@ try {
     $maxAttempts = 3;
     $filteredData = false;
     $totalData = false;
-    $processTimeData = false;
     
     for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
         error_log("Fetch attempt $attempt of $maxAttempts");
         
         // Получаем отфильтрованные данные
         if (!$filteredData) {
-            $filteredData = fetchWithRetry($filteredPageUrl, $cookies, $cookieFile, 2);
+            $filteredData = fetchWithRetry($filteredPageUrl, $cookies, $cookieFile, 3);
         }
         
         // Получаем общие данные
         if (!$totalData) {
-            $totalData = fetchWithRetry($totalPageUrl, $cookies, $cookieFile, 2);
-        }
-        
-        // Получаем данные о времени обработки
-        if (!$processTimeData) {
-            $processTimeData = fetchWithRetry($processTimeUrl, $cookies, $cookieFile, 2, true);
+            $totalData = fetchWithRetry($totalPageUrl, $cookies, $cookieFile, 3);
         }
         
         // Успех — страницы загрузились (содержат нужные маркеры).
@@ -496,10 +493,27 @@ try {
     if (!$filteredData || !$totalData) {
         throw new Exception('Failed to fetch data after ' . $maxAttempts . ' attempts');
     }
-    
-    if (!$processTimeData) {
-        error_log("WARNING: Failed to fetch process time data, using empty data");
-        $processTimeData = '';
+
+    $processTimeDashboardKey = 'rozpakuj';
+    $processTimeData = '';
+    if ($debug) {
+        $processTimeData = fetchWithRetry($processTimeUrl, $cookies, $cookieFile, 3, true) ?: '';
+        $processTimeIntervals = parseProcessTimeData($processTimeData);
+    } else {
+        $cachedPt = crm_process_time_cache_get($processTimeDashboardKey);
+        if ($cachedPt !== null) {
+            $processTimeIntervals = $cachedPt;
+            error_log('Process time: cache hit (TTL ' . CRM_PROCESS_TIME_CACHE_TTL . 's), CRM request skipped');
+        } else {
+            $processTimeData = fetchWithRetry($processTimeUrl, $cookies, $cookieFile, 3, true) ?: '';
+            if ($processTimeData === '') {
+                error_log('WARNING: process time fetch failed, empty chart until next request');
+            }
+            $processTimeIntervals = parseProcessTimeData($processTimeData);
+            if ($processTimeData !== '') {
+                crm_process_time_cache_set($processTimeDashboardKey, $processTimeIntervals);
+            }
+        }
     }
     
     @unlink($cookieFile);
@@ -534,7 +548,6 @@ try {
     
     $parsedFiltered = parseTableData($filteredData);
     $parsedTotal = parseTableData($totalData);
-    $processTimeIntervals = parseProcessTimeData($processTimeData);
     
     error_log("Parsed filtered orders: " . $parsedFiltered['orders']);
     error_log("Parsed total orders: " . $parsedTotal['orders']);

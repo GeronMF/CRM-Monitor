@@ -19,6 +19,9 @@ async function buildMain() {
       },
     },
   }));
+  mkdirSync('dist/api', { recursive: true });
+  copyFileSync('api/parse-crm-data-ecommerce.php', 'dist/api/parse-crm-data.php');
+  copyFileSync('api/process-time-cache.php', 'dist/api/process-time-cache.php');
   console.log('Main build complete!');
 }
 
@@ -51,6 +54,7 @@ async function buildDiar() {
     // Копируем API файл
     mkdirSync('dist-diar/api', { recursive: true });
     copyFileSync('api/parse-crm-data-diar.php', 'dist-diar/api/parse-crm-data.php');
+    copyFileSync('api/process-time-cache.php', 'dist-diar/api/process-time-cache.php');
     
     console.log('DIAR build complete!');
   } finally {
@@ -90,6 +94,7 @@ async function buildRozpakuj() {
     // Копируем API файл
     mkdirSync('dist-rozpakuj/api', { recursive: true });
     copyFileSync('api/parse-crm-data-rozpakuj.php', 'dist-rozpakuj/api/parse-crm-data.php');
+    copyFileSync('api/process-time-cache.php', 'dist-rozpakuj/api/process-time-cache.php');
     
     console.log('Rozpakuj build complete!');
   } finally {

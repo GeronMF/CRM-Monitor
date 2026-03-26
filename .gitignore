@@ -44,3 +44,6 @@ Thumbs.db
 
 # CRM credentials (never commit)
 api/config.php
+
+# Process time cache (server-local)
+api/.cache-process-time-*.json
