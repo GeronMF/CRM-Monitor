@@ -1,7 +1,7 @@
 import { build } from 'vite';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { copyFileSync, mkdirSync, cpSync } from 'fs';
+import { copyFileSync, mkdirSync, cpSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
 // Основная сборка (E-commerce)
@@ -57,7 +57,7 @@ async function buildDiar() {
     // Восстанавливаем оригинальный main.tsx
     copyFileSync(mainBackup, mainPath);
     // Удаляем backup
-    require('fs').unlinkSync(mainBackup);
+    unlinkSync(mainBackup);
   }
 }
 
@@ -96,7 +96,7 @@ async function buildRozpakuj() {
     // Восстанавливаем оригинальный main.tsx
     copyFileSync(mainBackup, mainPath);
     // Удаляем backup
-    require('fs').unlinkSync(mainBackup);
+    unlinkSync(mainBackup);
   }
 }
 
@@ -131,7 +131,7 @@ async function buildMega() {
     console.log('Mega build complete!');
   } finally {
     copyFileSync(mainBackup, mainPath);
-    require('fs').unlinkSync(mainBackup);
+    unlinkSync(mainBackup);
   }
 }
 
