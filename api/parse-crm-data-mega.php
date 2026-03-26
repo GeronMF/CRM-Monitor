@@ -205,67 +205,104 @@ function parseCallsCount($html) {
 function parseOrdersTable($html) {
     $orders = [];
 
-    // Ищем shop-table или любую первую большую таблицу
-    if (!preg_match('/<table[^>]*>([\s\S]*?)<\/table>/i', $html, $tableMatch)) {
-        error_log("parseOrdersTable: no table found");
+    // Находим ВСЕ таблицы и ищем ту, что содержит «Продукт» в заголовке
+    if (!preg_match_all('/<table[^>]*>([\s\S]*?)<\/table>/i', $html, $allTables)) {
+        error_log("parseOrdersTable: no tables found in HTML");
         return $orders;
     }
-    $tableHtml = $tableMatch[0];
 
-    // Определяем индексы колонок по заголовкам
-    $productIdx   = -1;
-    $quantityIdx  = -1;
-    $clientIdx    = -1;
+    $targetTableHtml = null;
+    $productIdx  = -1;
+    $quantityIdx = -1;
+    $clientIdx   = -1;
 
-    if (preg_match('/<thead[^>]*>([\s\S]*?)<\/thead>/i', $tableHtml, $headMatch)) {
-        $headHtml = $headMatch[1];
-        if (preg_match_all('/<td[^>]*>([\s\S]*?)<\/td>/i', $headHtml, $cols)) {
+    foreach ($allTables[0] as $tableHtml) {
+        // Ищем заголовки (th или td в thead/первом tr)
+        $headerHtml = '';
+        if (preg_match('/<thead[^>]*>([\s\S]*?)<\/thead>/i', $tableHtml, $hm)) {
+            $headerHtml = $hm[1];
+        } elseif (preg_match('/<tr[^>]*>([\s\S]*?)<\/tr>/i', $tableHtml, $hm)) {
+            $headerHtml = $hm[1];
+        }
+
+        $pIdx = -1; $qIdx = -1; $cIdx = -1;
+        $cellPattern = '/<(?:th|td)[^>]*>([\s\S]*?)<\/(?:th|td)>/i';
+        if (preg_match_all($cellPattern, $headerHtml, $cols)) {
             foreach ($cols[1] as $i => $colHtml) {
-                $colText = strtolower(trim(strip_tags($colHtml)));
-                if (strpos($colText, 'продукт') !== false || strpos($colText, 'product') !== false) {
-                    $productIdx = $i;
-                } elseif (strpos($colText, 'кільк') !== false || strpos($colText, 'колич') !== false || strpos($colText, 'кол-во') !== false || $colText === 'кол') {
-                    $quantityIdx = $i;
-                } elseif (strpos($colText, 'фіо') !== false || strpos($colText, 'фио') !== false || strpos($colText, 'клієнт') !== false || strpos($colText, 'клиент') !== false) {
-                    $clientIdx = $i;
+                $t = mb_strtolower(trim(strip_tags($colHtml)), 'UTF-8');
+                if (strpos($t, 'продукт') !== false || strpos($t, 'product') !== false) {
+                    $pIdx = $i;
+                } elseif (strpos($t, 'кільк') !== false || strpos($t, 'колич') !== false || strpos($t, 'кол-во') !== false) {
+                    $qIdx = $i;
+                } elseif (strpos($t, 'фіо') !== false || strpos($t, 'фио') !== false || strpos($t, 'клієнт') !== false || strpos($t, 'клиент') !== false) {
+                    $cIdx = $i;
                 }
             }
         }
-        error_log("parseOrdersTable: column indices - product=$productIdx, quantity=$quantityIdx, client=$clientIdx");
+
+        // Нашли таблицу с колонкой «Продукт»
+        if ($pIdx >= 0) {
+            $targetTableHtml = $tableHtml;
+            $productIdx  = $pIdx;
+            $quantityIdx = $qIdx;
+            $clientIdx   = $cIdx;
+            error_log("parseOrdersTable: found target table, columns product=$productIdx quantity=$quantityIdx client=$clientIdx");
+            break;
+        }
     }
 
-    // Парсим строки данных (с onclick, без data-group)
-    if (preg_match_all('/<tr([^>]*)>([\s\S]*?)<\/tr>/i', $tableHtml, $rows, PREG_SET_ORDER)) {
-        foreach ($rows as $row) {
-            $trAttrs  = $row[1];
-            $trHtml   = $row[2];
-            $hasOnclick  = preg_match('/onclick\s*=/i', $trAttrs);
-            $hasDataGroup = preg_match('/data-group\s*=/i', $trAttrs);
+    if ($targetTableHtml === null) {
+        error_log("parseOrdersTable: no table with 'Продукт' header found, trying fallback");
+        // Фолбэк: берём самую большую таблицу
+        usort($allTables[0], fn($a, $b) => strlen($b) - strlen($a));
+        $targetTableHtml = $allTables[0][0];
+    }
 
-            if (!$hasOnclick || $hasDataGroup) continue;
+    // Парсим все строки tbody (или все tr, пропуская первую/заголовочную)
+    $tbodyHtml = $targetTableHtml;
+    if (preg_match('/<tbody[^>]*>([\s\S]*?)<\/tbody>/i', $targetTableHtml, $bm)) {
+        $tbodyHtml = $bm[1];
+    }
 
-            if (preg_match_all('/<td[^>]*>([\s\S]*?)<\/td>/i', $trHtml, $cells)) {
-                $cellTexts = array_map(function($c) {
-                    return trim(preg_replace('/\s+/', ' ', strip_tags($c)));
-                }, $cells[1]);
+    if (!preg_match_all('/<tr([^>]*)>([\s\S]*?)<\/tr>/i', $tbodyHtml, $rows, PREG_SET_ORDER)) {
+        error_log("parseOrdersTable: no rows found");
+        return $orders;
+    }
 
-                $product  = $productIdx  >= 0 && isset($cellTexts[$productIdx])  ? $cellTexts[$productIdx]  : '';
-                $quantity = $quantityIdx >= 0 && isset($cellTexts[$quantityIdx]) ? $cellTexts[$quantityIdx] : '';
-                $client   = $clientIdx   >= 0 && isset($cellTexts[$clientIdx])   ? $cellTexts[$clientIdx]   : '';
+    $isFirstRow = ($productIdx < 0); // если не нашли заголовок — пропускаем первую строку
+    foreach ($rows as $rowIdx => $row) {
+        $trHtml = $row[2];
 
-                // Если индексы не определились — берём первые три ячейки
-                if ($productIdx < 0 && count($cellTexts) >= 1) $product  = $cellTexts[0];
-                if ($quantityIdx < 0 && count($cellTexts) >= 2) $quantity = $cellTexts[1];
-                if ($clientIdx   < 0 && count($cellTexts) >= 3) $client   = $cellTexts[2];
+        // Пропускаем строку-заголовок если нет tbody
+        if ($isFirstRow && $rowIdx === 0) continue;
 
-                if (!empty($product) || !empty($client)) {
-                    $orders[] = [
-                        'product'    => $product,
-                        'quantity'   => $quantity,
-                        'clientName' => $client,
-                    ];
-                }
-            }
+        if (!preg_match_all('/<td[^>]*>([\s\S]*?)<\/td>/i', $trHtml, $cells)) continue;
+
+        $cellTexts = array_map(function($c) {
+            return trim(preg_replace('/\s+/', ' ', strip_tags($c)));
+        }, $cells[1]);
+
+        // Пропускаем строки с менее чем 2 ячейками (разделители, итоги)
+        $nonEmpty = array_filter($cellTexts, fn($v) => $v !== '' && $v !== '&nbsp;');
+        if (count($nonEmpty) < 2) continue;
+
+        if ($productIdx >= 0) {
+            $product  = isset($cellTexts[$productIdx])  ? $cellTexts[$productIdx]  : '';
+            $quantity = $quantityIdx >= 0 && isset($cellTexts[$quantityIdx]) ? $cellTexts[$quantityIdx] : '';
+            $client   = $clientIdx   >= 0 && isset($cellTexts[$clientIdx])   ? $cellTexts[$clientIdx]   : '';
+        } else {
+            // Фолбэк: первые три ячейки
+            $product  = $cellTexts[0] ?? '';
+            $quantity = $cellTexts[1] ?? '';
+            $client   = $cellTexts[2] ?? '';
+        }
+
+        if (!empty($product) || !empty($client)) {
+            $orders[] = [
+                'product'    => $product,
+                'quantity'   => $quantity,
+                'clientName' => $client,
+            ];
         }
     }
 
