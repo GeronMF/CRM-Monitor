@@ -12,6 +12,17 @@ interface MegaData {
   orders: Order[];
 }
 
+function parseQuantity(value: string): number {
+  const t = value.trim().replace(/\s/g, '').replace(',', '.');
+  const n = parseFloat(t);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatTotalQuantity(total: number): string {
+  if (Number.isInteger(total)) return String(total);
+  return total.toLocaleString('uk-UA', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+}
+
 function App() {
   const [data, setData] = useState<MegaData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +99,8 @@ function App() {
 
   if (!data) return null;
 
+  const totalQuantity = data.orders.reduce((sum, o) => sum + parseQuantity(o.quantity), 0);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-cyan-700/40 via-blue-800/30 to-transparent"></div>
@@ -127,7 +140,7 @@ function App() {
         </div>
 
         {/* Calls metric */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
+        <div className="max-w-md mb-4 sm:mb-6">
           <div className="backdrop-blur-sm bg-slate-800/40 rounded-xl p-4 sm:p-5 border border-slate-700/50 shadow-xl">
             <div className="flex items-center justify-between mb-3">
               <p className="text-slate-400 text-xs sm:text-sm font-medium">Кількість дзвінків</p>
@@ -136,15 +149,6 @@ function App() {
               </div>
             </div>
             <p className="text-2xl sm:text-3xl font-bold text-white">{data.calls}</p>
-          </div>
-          <div className="backdrop-blur-sm bg-slate-800/40 rounded-xl p-4 sm:p-5 border border-slate-700/50 shadow-xl">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-slate-400 text-xs sm:text-sm font-medium">Замовлень у таблиці</p>
-              <div className="p-1.5 sm:p-2 bg-emerald-500/10 rounded-lg">
-                <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
-              </div>
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold text-white">{data.orders.length}</p>
           </div>
         </div>
 
@@ -183,6 +187,19 @@ function App() {
                     </tr>
                   ))}
                 </tbody>
+                {data.orders.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-cyan-500/40 bg-slate-800/60">
+                      <td className="px-4 sm:px-6 py-3 text-slate-400 text-xs sm:text-sm font-semibold" colSpan={2}>
+                        Итого (общее количество)
+                      </td>
+                      <td className="px-4 sm:px-6 py-3 text-cyan-200 font-bold text-base sm:text-lg">
+                        {formatTotalQuantity(totalQuantity)}
+                      </td>
+                      <td className="px-4 sm:px-6 py-3" />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           )}
