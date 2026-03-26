@@ -9,14 +9,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Фиксированная конфигурация для Трансляции канала Розпакуй
-$config = [
-    'login' => 'Zaharchenko',
-    'password' => 'Zaharchenko1234',
-    'roleId' => '9',
-    'sourceFilter' => ['Трансляция канала Розпакуй ТВ'],
-    'processTimeSourceId' => '65',
-];
+require_once __DIR__ . '/config.php';
+$config = $crm_credentials['rozpakuj'];
 
 $debug = isset($_GET['debug']) && $_GET['debug'] === 'true';
 

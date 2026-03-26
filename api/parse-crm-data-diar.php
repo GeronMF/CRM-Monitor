@@ -9,14 +9,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Фиксированная конфигурация для ДИАР
-$config = [
-    'login' => 'Zaharchenko',
-    'password' => 'Zaharchenko1234',
-    'roleId' => '9',
-    'sourceFilter' => ['ДИАР_Укр'],
-    'processTimeSourceId' => '4',
-];
+require_once __DIR__ . '/config.php';
+$config = $crm_credentials['diar'];
 
 $debug = isset($_GET['debug']) && $_GET['debug'] === 'true';
 

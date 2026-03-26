@@ -9,14 +9,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Фиксированная конфигурация для E-commerce
-$config = [
-    'login' => 'German',
-    'password' => 'K9#bT2!mQ8vX*zL4',
-    'roleId' => '39',
-    'sourceFilter' => ['ЛЕНДИНГ', 'Сайты'],
-    'processTimeSourceId' => '60',
-];
+require_once __DIR__ . '/config.php';
+$config = $crm_credentials['ecommerce'];
 
 $debug = isset($_GET['debug']) && $_GET['debug'] === 'true';
 

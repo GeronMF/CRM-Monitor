@@ -100,11 +100,47 @@ async function buildRozpakuj() {
   }
 }
 
+// Сборка для МегаРозпакуй
+async function buildMega() {
+  console.log('Building Mega...');
+
+  const mainPath       = 'src/main.tsx';
+  const mainMegaPath   = 'src/main-mega.tsx';
+  const mainBackup     = 'src/main.tsx.backup';
+
+  copyFileSync(mainPath, mainBackup);
+  copyFileSync(mainMegaPath, mainPath);
+
+  try {
+    await build(defineConfig({
+      plugins: [react()],
+      base: '/crm-monitor/mega/',
+      build: {
+        outDir: 'dist-mega',
+        rollupOptions: {
+          input: {
+            main: 'index.html',
+          },
+        },
+      },
+    }));
+
+    mkdirSync('dist-mega/api', { recursive: true });
+    copyFileSync('api/parse-crm-data-mega.php', 'dist-mega/api/parse-crm-data.php');
+
+    console.log('Mega build complete!');
+  } finally {
+    copyFileSync(mainBackup, mainPath);
+    require('fs').unlinkSync(mainBackup);
+  }
+}
+
 // Запускаем все сборки
 async function buildAll() {
   await buildMain();
   await buildDiar();
   await buildRozpakuj();
+  await buildMega();
   console.log('All builds complete!');
 }
 
